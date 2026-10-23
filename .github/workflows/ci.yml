@@ -1,0 +1,20 @@
+name: Security checks
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile with real discord.py
+        run: |
+          python -c 'import discord_audit, discord_fix, role_mute'
+          python -m compileall -q discord_audit.py discord_fix.py role_mute.py
+      - name: Offline safety tests
+        run: python -m unittest discover -s tests -v

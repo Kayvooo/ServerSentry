@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+fixer_output/
+audit_output/
+policy.json
+policy.*.json
+!policy.example.json
+backups/
+*.log
+*.zip
+*state*.json
