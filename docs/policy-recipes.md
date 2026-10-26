@@ -18,6 +18,8 @@ For an administrator role, the default protection rejects edits. To explicitly r
 
 Only the named permission keys change. All other settings for that role, other roles (including booster and bot roles), and per-member overrides remain untouched.
 
+Allowing or clearing a deny for privileged flags also requires `allow_privilege_grant:true` and `--allow-privilege-grants`. Permission aliases receive the same checks. An overwrite on a category also affects currently synchronized children; the M2 plan lists those effects.
+
 ## Make the muted role unable to see channels
 
 ```json
@@ -69,8 +71,8 @@ For `kick_members`, `ban_members`, `manage_roles`, etc., the action must include
 1. Set your local `.env`, including `GUILD_ID`.
 2. Run `python discord_audit.py` to make an initial snapshot.
 3. Run `python discord_fix.py --policy policy.json` to preview actions. If errors occur, revise the policy rather than bypass checks.
-4. Run `python discord_fix.py --policy policy.json --apply` and enter the exact confirmation phrase.
-5. Run `python discord_audit.py` again and compare the new audit to the original.
-6. Keep local backups private and remove excess bot privileges when finished.
+4. Run `python discord_fix.py --plan YOUR_SAVED_PLAN.json --apply` with the same privileged/destructive flags and enter the exact confirmation phrase. Direct `--policy ... --apply` is also supported.
+5. Review the automatically generated journal, fresh before/after audits and comparison under `fixer_output/run_<run-id>/`. A mismatch or unknown API outcome stops the remaining steps.
+6. Use the [guided repair instructions](repairs.md) for selected supported recovery. Keep local backups private and remove excess bot privileges when finished.
 
 There is no 24/7 process or change-monitoring watcher.

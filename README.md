@@ -7,7 +7,7 @@
 **Two independent tools:**
 
 - **Audit (`discord_audit.py`)** is strictly read-only. Exports detailed role/channel permission data and a Markdown risk report. No messages, passwords or bot tokens are collected in reports.
-- **Fixer (`discord_fix.py`)** applies *only* explicit, server-local JSON policy actions. It previews first, protects administrator roles by default, makes a local backup and requires a typed confirmation before any Discord change. It never automatically synchronizes every channel or guesses which special overrides are unnecessary.
+- **Fixer (`discord_fix.py`)** applies *only* explicit, server-local JSON policy actions. It checks current API data, previews sequential changes, protects administrator roles by default, makes a local backup and requires typed confirmation. Every write is journaled and read back; a final audit and comparison run automatically. It never automatically synchronizes every channel or guesses which special overrides are unnecessary.
 - **Optional one-time role mute (`role_mute.py`)** replaces a member's assignable roles with a selected muted role and locally records the originals for manual restoration. It never installs a background watcher or creates per-member channel overrides.
 
 > **Important:** Every server has its own permissions model. ServerSentry offers risk signals and explicit repair operations, **not** an autonomous permission-decision engine. A channel that is not synced may be intentionally configured for boosters, moderators, tickets or bots. Review each proposed change.
@@ -79,6 +79,14 @@ On Windows, substitute `py` for `python` and quote paths containing spaces. Find
 
 ## 2. Configure targeted fixes
 
+For supported elevated-role findings, an **offline assistant** can create revocation proposals. You choose the finding numbers and the exact permissions to revoke:
+
+```bash
+python serversentry.py suggest YOUR_AUDIT.json --output policy.suggested.json
+```
+
+It skips Administrator, managed, protected and default roles. It cannot infer private-channel intent or convert every finding into a fix. Review the generated JSON before using it. You can also write a policy manually:
+
 Copy `config/policy.example.json` to `policy.json` and insert **your own Discord IDs locally**:
 
 ```json
@@ -104,13 +112,23 @@ Preview:
 python discord_fix.py --policy policy.json
 ```
 
-Only after reviewing the local preview (`fixer_output/plan_*.json`), apply:
+Only after reviewing the local plan (`fixer_output/plan_*.json`), apply that exact saved plan:
 
 ```bash
-python discord_fix.py --policy policy.json --apply
+python discord_fix.py --plan fixer_output/plan_YOUR_PLAN_ID.json --apply
 ```
 
-You will have to type `APPLY <your guild ID>` **exactly**. A full local permission backup is written to `fixer_output/` before the first write. The fixer stops at an error; **changes already made are not automatically rolled back**. Run another audit afterward.
+You will have to type `APPLY <your guild ID>` **exactly**. The plan is rebuilt and checked against fresh REST data; stale plans require a new preview. Direct `--policy policy.json --apply` still previews and confirms in one invocation. Privileged-grant/destructive-sync flags must match those used to create a saved plan.
+
+Before writing, the fixer saves a permission backup, baseline audit and durable journal to `fixer_output/run_<run-id>/`. It stops on errors, concurrent changes, mismatched readbacks or unavailable verification; **changes already made are not automatically rolled back**. An API timeout can have an unknown outcome. Review the journal and generated before/after comparison before retrying.
+
+Selected, individually verified role/role-overwrite changes can be restored with another explicit preview and confirmation:
+
+```bash
+python discord_fix.py --restore fixer_output/run_YOUR_RUN_ID/journal.json --steps 1,2
+```
+
+This produces a new guarded plan. Use its saved path with `--plan ... --apply` after review. Restoring privileged grants still needs the extra opt-in. Channel deletion/messages, role moves, member-overwrite cleanup and whole-channel sync are not automatically restored. See [guided repairs](docs/repairs.md) for statuses, recovery limits and complete commands.
 
 For supported fixes, permissions, and a protected channel synchronization recipe, see [Policy recipes](docs/policy-recipes.md).
 
@@ -154,10 +172,10 @@ Role originals are saved in `fixer_output/muted_role_state.json` **before** muti
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall -q discord_audit.py discord_fix.py role_mute.py serversentry.py serversentry_snapshots.py serversentry_compare.py serversentry_report.py
+python -m compileall -q discord_audit.py discord_fix.py role_mute.py serversentry.py serversentry_snapshots.py serversentry_compare.py serversentry_report.py serversentry_repair_model.py serversentry_repair_run.py serversentry_suggestions.py
 ```
 
-Tests cover policy safety, repository sanitization, history persistence, semantic comparisons, HTML escaping and the audit callback with a synthetic guild. CI also checks selected Python versions on Linux and Windows, plus browser filters and report behavior. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server. See [contributing](CONTRIBUTING.md) for development and optional browser checks.
+Tests cover policy safety, repository sanitization, history, comparisons, reports and the audit callback. Synthetic REST tests also exercise sequential repairs, stale plans, journal failures, uncertain requests, verification, restore guards and confirmation. CI checks selected Python versions on Linux and Windows, plus browser report behavior. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server. See [contributing](CONTRIBUTING.md) for development and optional browser checks.
 
 ## License
 

@@ -11,7 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 SCHEMA_VERSION = 1
-TOOL_VERSION = "m1-dev"
+TOOL_VERSION = "m2-dev"
 RULESET_VERSION = "1"
 RULE_CODES = (
     "everyone_global_elevated", "elevated_role_review", "channel_obfuscated",
@@ -145,6 +145,16 @@ def load_snapshot(path: Path) -> dict:
     return validate_snapshot(data)
 
 
+def fsync_directory(path: Path) -> None:
+    """Persist directory entries on POSIX; Windows has no equivalent portable API."""
+    if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def atomic_write(path: Path, text: str) -> None:
     """Replace one file atomically; existing data survives failed writes/replaces."""
     path = Path(path)
@@ -156,6 +166,7 @@ def atomic_write(path: Path, text: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(name, path)
+        fsync_directory(path.parent)
     finally:
         if os.path.exists(name):
             os.unlink(name)

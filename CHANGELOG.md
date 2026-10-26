@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased – M2
+
+- Add an offline assistant for explicitly selected elevated-role permission revocations.
+- Preflight against fresh REST role/channel/member data and project dependent actions in order.
+- Bind saved plans to the reviewed state and require matching privilege/destructive flags.
+- Check hierarchy, bot permissions, protected targets and category effects before writing.
+- Save backups, baseline audit and a durable per-step journal before submitting changes.
+- Read back every write, stop on mismatches or unknown outcomes, and create a final audit/comparison.
+- Generate guarded inverse plans for selected individually verified role/role-overwrite steps.
+- Test partial execution, concurrent edits, lost responses, cancellation, journal failures, verification and recovery using real discord.py objects with a synthetic REST adapter.
+
 ## Unreleased – M1
 
 - Keep separate versioned historical snapshots and reports for every new audit.

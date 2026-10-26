@@ -113,7 +113,8 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
     obfuscated_count = 0
     unsynced_count = 0
     for channel in channels:
-        flags_value = int(getattr(getattr(channel, "flags", None), "value", 0))
+        flags_value = (int(getattr(getattr(channel, "flags", None), "value", 0))
+                       | getattr(guild, "raw_channel_flags", {}).get(channel.id, 0))
         obfuscated = bool(flags_value & OBFUSCATED_FLAG)
         if obfuscated:
             obfuscated_count += 1
@@ -133,6 +134,9 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
 
         category = getattr(channel, "category", None)
         sync_state = bool(channel.permissions_synced) if category is not None else None
+        raw_channel_data = getattr(guild, "raw_channel_overwrites", {})
+        if category is not None and channel.id in raw_channel_data and category.id in raw_channel_data:
+            sync_state = raw_channel_data[channel.id] == raw_channel_data[category.id]
         if sync_state is False:
             unsynced_count += 1
         everyone_effective = one_role_permissions(channel, default_role)
@@ -153,6 +157,9 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
                     member_aliases[target.id] = f"member_{len(member_aliases) + 1}"
                 identifier = member_aliases[target.id]
                 display_name = identifier
+            raw_entry = raw_channel_data.get(channel.id, {}).get(f"{kind}:{target.id}")
+            if raw_entry is not None:
+                allowed, denied = discord.Permissions(int(raw_entry["allow"])), discord.Permissions(int(raw_entry["deny"]))
             allow_names = enabled_permissions(allowed)
             deny_names = enabled_permissions(denied)
             raw_overwrites.append({
