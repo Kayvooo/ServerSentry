@@ -2,29 +2,10 @@
 import importlib
 from pathlib import Path
 import sys
-import types
 import unittest
 
-# Keep tests useful without pip/network; real-discord import is tested separately in CI.
+# Run policy tests against the actual supported discord.py dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-discord = types.ModuleType("discord")
-class _Perms:
-    VALID_FLAGS = {"administrator", "mention_everyone", "kick_members", "manage_roles", "manage_channels", "send_messages"}
-    def __init__(self, value=0): self.value = value
-class _Overwrite:
-    VALID_NAMES = {"view_channel", "send_messages", "connect", "speak"}
-discord.Permissions = _Perms
-discord.PermissionOverwrite = _Overwrite
-discord.Role = type("Role", (), {})
-discord.CategoryChannel = type("CategoryChannel", (), {})
-discord.abc = types.SimpleNamespace(GuildChannel=object)
-discord.Client = type("Client", (), {})
-discord.Guild = type("Guild", (), {})
-sys.modules["discord"] = discord
-if "dotenv" not in sys.modules:
-    dotenv = types.ModuleType("dotenv")
-    dotenv.load_dotenv = lambda *a, **k: None
-    sys.modules["dotenv"] = dotenv
 fixer = importlib.import_module("discord_fix")
 
 
