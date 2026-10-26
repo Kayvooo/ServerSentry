@@ -44,10 +44,38 @@ python discord_audit.py
 
 Results are written to `audit_output/` (ignored by Git):
 
-- `server_audit_<guild-id>.json`: roles, raw channel overwrites and effective permission view of each **single** role.
+- `server_audit_<guild-id>.json`: versioned snapshot with roles, raw channel overwrites and effective permission view of each **single** role.
 - `server_report_<guild-id>.md`: warnings, recommendations and audit limitations.
+- `server_report_<guild-id>.html`: an interactive local report with search, filters and expandable evidence.
+- `history/<guild-id>/<scan-id>/`: a separate complete snapshot, Markdown report and HTML report for **every new audit**. Previous runs are retained; the familiar files above remain the latest exports.
 
 The raw audit contains your server name, role names, channel names and Discord identifiers. It is **private output, not a sample to commit**. Member-specific overwrite targets are pseudonymized by the auditor. A real member with several roles can have different effective permissions from the single-role matrix.
+
+### Try the report without a bot token
+
+The offline commands use only Python's standard library. No installation, Discord connection or token is required for the demo:
+
+```bash
+python serversentry.py demo
+```
+
+Open `audit_output/demo.html` in your browser. The bundled examples are entirely synthetic. The report is self-contained: no hosting, login, external fonts, CDNs or telemetry. JavaScript enables filtering; the evidence remains readable without it.
+
+### Compare two scans offline
+
+Use two historical `snapshot.json` paths from the **same server**, oldest first:
+
+```bash
+python serversentry.py compare BEFORE.json AFTER.json --output audit_output/comparison.html --json-output audit_output/comparison.json
+```
+
+To render an existing export, including the original unversioned format:
+
+```bash
+python serversentry.py report YOUR_AUDIT.json --output audit_output/report.html
+```
+
+On Windows, substitute `py` for `python` and quote paths containing spaces. Findings are grouped by rule and target. Comparisons show permission changes, renames, added roles/channels and changes in severity. Missing or hidden channels are **not** automatically counted as fixed. Legacy exports do not record rule coverage, and member aliases cannot identify the same person across scans. See [reports and history](docs/reports.md) for status meanings, examples and limitations.
 
 ## 2. Configure targeted fixes
 
@@ -126,10 +154,10 @@ Role originals are saved in `fixer_output/muted_role_state.json` **before** muti
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall -q discord_audit.py discord_fix.py role_mute.py
+python -m compileall -q discord_audit.py discord_fix.py role_mute.py serversentry.py serversentry_snapshots.py serversentry_compare.py serversentry_report.py
 ```
 
-Tests cover policy safety and repository sanitization. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server.
+Tests cover policy safety, repository sanitization, history persistence, semantic comparisons, HTML escaping and the audit callback with a synthetic guild. CI also checks selected Python versions on Linux and Windows, plus browser filters and report behavior. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server. See [contributing](CONTRIBUTING.md) for development and optional browser checks.
 
 ## License
 

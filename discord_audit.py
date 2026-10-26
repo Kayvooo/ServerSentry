@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from datetime import datetime, timezone
-import json
 import os
 from pathlib import Path
 import re
@@ -15,6 +14,9 @@ from typing import Any
 
 import discord
 from dotenv import load_dotenv
+
+from serversentry_report import render_html
+from serversentry_snapshots import prepare_snapshot, save_audit_bundle
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "audit_output"
@@ -310,20 +312,13 @@ class AuditClient(discord.Client):
                 raise RuntimeError(
                     "Guild not found. Check GUILD_ID and make sure the bot is installed on that server."
                 )
-            data = audit_guild(guild)
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            if os.name != "nt":
-                OUTPUT_DIR.chmod(0o700)
-            json_file = OUTPUT_DIR / f"server_audit_{guild.id}.json"
-            report_file = OUTPUT_DIR / f"server_report_{guild.id}.md"
-            json_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            report_file.write_text(markdown_report(data), encoding="utf-8")
-            if os.name != "nt":
-                json_file.chmod(0o600)
-                report_file.chmod(0o600)
+            data = prepare_snapshot(audit_guild(guild))
+            paths = save_audit_bundle(data, markdown_report(data), render_html(data), OUTPUT_DIR)
             print(f"Audit completed for: {guild.name}")
-            print(f"JSON:    {json_file}")
-            print(f"Report: {report_file}")
+            print(f"JSON:    {paths['json']}")
+            print(f"Report:  {paths['markdown']}")
+            print(f"HTML:    {paths['html']}")
+            print(f"History: {paths['history']}")
             print(f"Results: {data['summary']}")
             if data["server"]["obfuscated_channel_count"]:
                 print("WARNING: Some channels are not fully visible to the bot.")

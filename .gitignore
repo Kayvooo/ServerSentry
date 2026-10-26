@@ -13,5 +13,7 @@ policy.*.json
 !policy.example.json
 backups/
 *.log
+node_modules/
 *.zip
 *state*.json
+

@@ -1,0 +1,200 @@
+{
+  "audit": {
+    "schema_version": 1,
+    "tool_version": "m1-dev",
+    "scan_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ruleset_version": "1",
+    "rules_checked": [
+      "everyone_global_elevated",
+      "elevated_role_review",
+      "channel_obfuscated",
+      "conflicting_overwrite",
+      "sensitive_channel_visible_to_everyone",
+      "everyone_channel_moderation",
+      "individual_member_overrides",
+      "unsynced_channels",
+      "audit_bot_admin"
+    ],
+    "channel_inventory": "cached_guild_channels",
+    "generated_at_utc": "2026-10-21T10:00:00+00:00",
+    "read_only": true,
+    "message_content_collected": false,
+    "member_names_or_ids_collected": false,
+    "limitations": [
+      "Synthetic demonstration. All names, identifiers and findings are invented.",
+      "Single-role permissions do not represent a member with several roles.",
+      "Private threads and message content are not inspected."
+    ]
+  },
+  "server": {
+    "id": "100",
+    "name": "Demo Community",
+    "role_count": 2,
+    "channel_count_visible_or_obfuscated": 4,
+    "obfuscated_channel_count": 1,
+    "audit_bot": {
+      "has_administrator": false
+    }
+  },
+  "roles": [
+    {
+      "id": "100",
+      "name": "@everyone",
+      "position": 0,
+      "is_everyone": true,
+      "managed": false,
+      "bot_managed": false,
+      "mentionable": false,
+      "hoist": false,
+      "guild_permissions": [
+        "view_channel",
+        "send_messages",
+        "mention_everyone"
+      ]
+    },
+    {
+      "id": "200",
+      "name": "Community helpers",
+      "position": 1,
+      "is_everyone": false,
+      "managed": false,
+      "bot_managed": false,
+      "mentionable": false,
+      "hoist": false,
+      "guild_permissions": [
+        "manage_roles"
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "id": "1000",
+      "name": "community-chat",
+      "type": "text",
+      "position": 0,
+      "category_id": null,
+      "category_name": null,
+      "permissions_synced": null,
+      "obfuscated": false,
+      "everyone_effective_permissions": {
+        "view_channel": true,
+        "send_messages": true,
+        "manage_webhooks": false
+      },
+      "permission_overwrites": [
+        {
+          "target_type": "member",
+          "target_id": "member_9",
+          "target_name": "member_9",
+          "allow": [
+            "send_messages"
+          ],
+          "deny": [
+            "view_channel"
+          ]
+        }
+      ],
+      "member_override_count": 1,
+      "single_role_permission_matrix": []
+    },
+    {
+      "id": "1001",
+      "name": "staff",
+      "type": "text",
+      "position": 1,
+      "category_id": null,
+      "category_name": null,
+      "permissions_synced": null,
+      "obfuscated": false,
+      "everyone_effective_permissions": {
+        "view_channel": false,
+        "send_messages": false,
+        "manage_webhooks": false
+      },
+      "permission_overwrites": [
+        {
+          "target_type": "role",
+          "target_id": "100",
+          "target_name": "@everyone",
+          "allow": [],
+          "deny": [
+            "view_channel"
+          ]
+        }
+      ],
+      "member_override_count": 0,
+      "single_role_permission_matrix": []
+    },
+    {
+      "id": "1002",
+      "type": "text",
+      "category_id": null,
+      "obfuscated": true
+    },
+    {
+      "id": "1003",
+      "name": "music",
+      "type": "text",
+      "position": 3,
+      "category_id": null,
+      "category_name": null,
+      "permissions_synced": null,
+      "obfuscated": false,
+      "everyone_effective_permissions": {
+        "view_channel": true,
+        "send_messages": true,
+        "manage_webhooks": false
+      },
+      "permission_overwrites": [],
+      "member_override_count": 0,
+      "single_role_permission_matrix": []
+    }
+  ],
+  "findings": [
+    {
+      "severity": "warning",
+      "code": "everyone_global_elevated",
+      "title": "@everyone has powerful server-wide permissions",
+      "details": "@everyone permissions: mention_everyone",
+      "recommendation": "Grant @everyone only explicitly needed permissions.",
+      "role_id": "100"
+    },
+    {
+      "severity": "warning",
+      "code": "elevated_role_review",
+      "title": "Role 'Community helpers' has powerful permissions",
+      "details": "Server permissions: manage_roles.",
+      "recommendation": "Verify that the role is assigned only to trusted members or bots.",
+      "role_id": "200"
+    },
+    {
+      "severity": "warning",
+      "code": "channel_obfuscated",
+      "title": "A channel is not fully visible to the audit bot",
+      "details": "Discord obscured channel metadata; the channel cannot be fully audited.",
+      "recommendation": "Verify the bot can view this channel and rerun the audit.",
+      "channel_id": "1002"
+    },
+    {
+      "severity": "info",
+      "code": "conflicting_overwrite",
+      "title": "Conflicting override in #community-chat",
+      "details": "member_9: view_channel is denied while sending is allowed.",
+      "recommendation": "Review intent; additional roles may change effective access.",
+      "channel_id": "1000",
+      "target": "member_9"
+    },
+    {
+      "severity": "info",
+      "code": "individual_member_overrides",
+      "title": "Member-specific overwrites in #community-chat",
+      "details": "1 member(s) have channel overwrites. Member IDs were pseudonymized.",
+      "recommendation": "Review whether these exceptions are still necessary.",
+      "channel_id": "1000"
+    }
+  ],
+  "summary": {
+    "warning": 3,
+    "info": 2
+  }
+}

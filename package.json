@@ -1,0 +1,10 @@
+{
+  "name": "serversentry-report-checks",
+  "private": true,
+  "scripts": {
+    "test:browser": "node tests/report_browser.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
