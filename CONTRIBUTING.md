@@ -39,6 +39,14 @@ The check generates temporary synthetic reports and verifies filters, expandable
 
 New rules should include a stable code, rationale, severity, scope limits and meaningful tests. Do not infer server intent solely from names. Update the ruleset metadata when rule behavior changes; see `docs/reports.md`.
 
+## Repair changes
+
+Keep planning separate from Discord writes. `serversentry_repair_model.py` projects actions on plain data; `serversentry_repair_run.py` submits one reviewed primitive at a time. Use fresh REST data for guards and readback. Preserve raw channel coverage flags when converting discord.py objects.
+
+The synthetic adapter in `tests/repair_fakes.py` constructs real discord.py objects and intercepts HTTP methods. Cover repeated target edits, preflight failure, lost responses, partial execution, cancellation, persistence failure and recovery conflicts when changing a write path. A success response alone is insufficient: persist `in_progress` before the request, verify its effect afterward and stop on uncertainty. Never add automatic rollback or silently broaden a reviewed plan.
+
+Recovery must preserve protected targets and privilege checks, require explicit step selection, and refuse unsupported/unknown outcomes. See `docs/repairs.md` for the journal contract and limitations.
+
 ## Keep private data out of contributions
 
 Use invented names and short synthetic numeric IDs in fixtures. Do not attach real audit exports, policies, backups, tokens or member state to issues or pull requests. The repository sanitation check flags production-sized IDs and token-shaped strings. If a real token was exposed, rotate it; deleting it from a new commit is insufficient.

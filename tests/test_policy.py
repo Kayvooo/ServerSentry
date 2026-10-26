@@ -1,5 +1,6 @@
 """Static policy and safety tests; no Discord token, network, or real IDs."""
 import importlib
+import asyncio
 from pathlib import Path
 import sys
 import unittest
@@ -34,24 +35,14 @@ class PolicySafetyTests(unittest.TestCase):
             "actions":[{"type":"role_permissions", "role_id":"123456789012346", "revoke":["mention_everyone"]}]})["actions"]),1)
 
     def test_sync_difference_fails_closed(self):
-        class Channel:
-            id=111
-            name="channel"
-            permissions_synced=False
-            category=None
-        ch=Channel()
-        ch.category=type("Category",(),{"name":"category"})()
-        class Guild:
-            def get_channel(self,cid): return ch
-        original = fixer.role_overwrite_snapshot
-        try:
-            def fake_snapshot(obj): return {"a":1} if obj is ch else {"a":2}
-            fixer.role_overwrite_snapshot = fake_snapshot
-            with self.assertRaisesRegex(ValueError,"Sync would erase"):
-                fixer.make_plan(Guild(), {"actions":[{"type":"sync_channel","channel_id":"123456789012345"}]},
-                                destructive_sync=False, grants=False)
-        finally:
-            fixer.role_overwrite_snapshot=original
+        from repair_fakes import Harness, GUILD, CUSTOM
+        from serversentry_repair_model import fresh_guild
+        async def scenario():
+            api = Harness()
+            guild = await fresh_guild(api.client, GUILD)
+            fixer.make_plan(guild, {"version": 1, "actions": [{"type": "sync_channel", "channel_id": str(CUSTOM)}]})
+        with self.assertRaisesRegex(ValueError, "Sync would erase"):
+            asyncio.run(scenario())
 
     def test_repository_has_no_server_specific_ids_or_tokens(self):
         root = Path(__file__).resolve().parents[1]

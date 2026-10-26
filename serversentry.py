@@ -25,6 +25,12 @@ def parser() -> argparse.ArgumentParser:
     compare.add_argument("--json-output", type=Path, help="Optional machine-readable comparison")
     demo = commands.add_parser("demo", help="Generate a comparison from bundled synthetic examples")
     demo.add_argument("--output", type=Path, default=Path("audit_output/demo.html"))
+    suggest = commands.add_parser("suggest", help="Choose supported permission revocations from an audit (offline)")
+    suggest.add_argument("snapshot", type=Path)
+    suggest.add_argument("--output", type=Path, required=True, help="Local suggested policy JSON; review before use")
+    suggest.add_argument("--select", help="Explicit finding numbers, otherwise ask interactively")
+    suggest.add_argument("--revoke", help="Explicit permission names for the selected findings, otherwise ask")
+    suggest.add_argument("--protect-role", action="append", default=[], help="Additional role ID never to propose editing")
     return cli
 
 
@@ -43,6 +49,15 @@ def _protect_inputs(inputs: list[Path], outputs: list[Path]) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == "suggest":
+            from serversentry_suggestions import interactive_suggestion
+            if args.snapshot.resolve() == args.output.resolve():
+                raise ValueError("Output must not overwrite an input snapshot")
+            policy = interactive_suggestion(load_snapshot(args.snapshot), selected=args.select, revoke=args.revoke,
+                                            protected_ids=args.protect_role)
+            atomic_write(args.output, json.dumps(policy, ensure_ascii=False, indent=2) + "\n")
+            print(f"Suggested policy: {args.output}. Review it; no Discord connection or changes.")
+            return 0
         if args.command == "report":
             _protect_inputs([args.snapshot], [args.output])
             html = render_html(load_snapshot(args.snapshot))
@@ -69,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Finding groups:", json.dumps(comparison["summary"], sort_keys=True))
         print("No Discord connection or changes. Reports contain private server data.")
         return 0
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, EOFError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
