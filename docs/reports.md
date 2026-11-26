@@ -80,3 +80,9 @@ When modifying rule semantics, update `RULESET_VERSION` in `serversentry_snapsho
 ## Limits
 
 These are permission risk signals, not a complete security assessment. Channel-name checks are heuristics. Owner privileges, combinations of multiple roles, private threads, message content and member assignments are not fully represented by the single-role matrix. The fixer and any Discord writes are outside these offline commands.
+
+## Report layout and links
+
+The HTML report opens with the scan overview (open signals by severity, hidden channels, accepted risks), then next-step commands, the filterable review queue, object changes (comparisons), expectations and accepted risks, the recorded inventory and the scope. Use the severity buttons, search (press `/`) and *More filters* to narrow the queue. The theme follows your system and can be switched; printing expands all evidence.
+
+Links to the project and the [rule reference](rules.md) are plain anchors that open in a new tab. Nothing is requested while the page is open, and a content security policy blocks all other network access. Change the links in `serversentry_links.py`; set `COMMUNITY_URL` there to show a community-server link in the footer.

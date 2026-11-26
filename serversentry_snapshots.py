@@ -11,13 +11,17 @@ from typing import Any
 from uuid import uuid4
 
 SCHEMA_VERSION = 1
-TOOL_VERSION = "m2-dev"
-RULESET_VERSION = "1"
+TOOL_VERSION = "m4-dev"
+RULESET_VERSION = "2"
 RULE_CODES = (
     "everyone_global_elevated", "elevated_role_review", "channel_obfuscated",
     "conflicting_overwrite", "sensitive_channel_visible_to_everyone",
     "everyone_channel_moderation", "individual_member_overrides",
     "unsynced_channels", "audit_bot_admin",
+    # Ruleset 2 (M3)
+    "server_verification_low", "server_content_filter_off", "server_mfa_not_required",
+    "role_hierarchy_escalation", "role_channel_management_override", "role_moderation_review",
+    "everyone_channel_mention_everyone", "everyone_voice_moderation", "announcement_open_posting",
 )
 
 
@@ -124,6 +128,22 @@ def validate_snapshot(data: Any) -> dict:
         for field in ("role_id", "channel_id", "target"):
             if field in finding and not isinstance(finding[field], str):
                 raise ValueError(f"Finding {field} must be a string")
+        for field in ("accepted", "acceptance_expired"):
+            if field in finding and (
+                not isinstance(finding[field], dict)
+                or any(not isinstance(finding[field].get(k), str) for k in ("reason", "expires"))
+            ):
+                raise ValueError(f"Finding {field} needs a reason and an expires date")
+        if "permissions" in finding and (
+            not isinstance(finding["permissions"], list) or any(not isinstance(x, str) for x in finding["permissions"])
+        ):
+            raise ValueError("Finding permissions must be permission names")
+    if "settings" in server and (
+        not isinstance(server["settings"], dict) or any(not isinstance(v, str) for v in server["settings"].values())
+    ):
+        raise ValueError("Snapshot server.settings must map names to strings")
+    if "policy" in data and not isinstance(data["policy"], dict):
+        raise ValueError("Snapshot policy must be an object")
     return data
 
 
@@ -132,7 +152,9 @@ def prepare_snapshot(data: dict) -> dict:
     result["audit"].update(
         schema_version=SCHEMA_VERSION, tool_version=TOOL_VERSION,
         scan_id=uuid4().hex, ruleset_version=RULESET_VERSION,
-        rules_checked=list(RULE_CODES), channel_inventory="cached_guild_channels",
+        # Optional rules (declared expectations) were recorded by apply_policy only if they ran.
+        rules_checked=list(RULE_CODES) + [x for x in data["audit"].get("rules_checked", []) if x not in RULE_CODES],
+        channel_inventory="cached_guild_channels",
     )
     return result
 

@@ -46,7 +46,7 @@ Results are written to `audit_output/` (ignored by Git):
 
 - `server_audit_<guild-id>.json`: versioned snapshot with roles, raw channel overwrites and effective permission view of each **single** role.
 - `server_report_<guild-id>.md`: warnings, recommendations and audit limitations.
-- `server_report_<guild-id>.html`: an interactive local report with search, filters and expandable evidence.
+- `server_report_<guild-id>.html`: an interactive local report (dark/light, filters, expandable evidence, copyable next steps, links to the rule reference and docs). It is one file and makes no external requests.
 - `history/<guild-id>/<scan-id>/`: a separate complete snapshot, Markdown report and HTML report for **every new audit**. Previous runs are retained; the familiar files above remain the latest exports.
 
 The raw audit contains your server name, role names, channel names and Discord identifiers. It is **private output, not a sample to commit**. Member-specific overwrite targets are pseudonymized by the auditor. A real member with several roles can have different effective permissions from the single-role matrix.
@@ -77,6 +77,32 @@ python serversentry.py report YOUR_AUDIT.json --output audit_output/report.html
 
 On Windows, substitute `py` for `python` and quote paths containing spaces. Findings are grouped by rule and target. Comparisons show permission changes, renames, added roles/channels and changes in severity. Missing or hidden channels are **not** automatically counted as fixed. Legacy exports do not record rule coverage, and member aliases cannot identify the same person across scans. See [reports and history](docs/reports.md) for status meanings, examples and limitations.
 
+### What the audit checks
+
+Eighteen rules (ruleset 2): @everyone and role permissions, role-hierarchy escalation, channel management overrides, server
+settings such as verification level and 2FA for moderation, @everyone mass mentions and voice moderation, announcement
+channels, bots with moderation permissions and more. Each finding links to the [rule reference](docs/rules.md) with rationale, severity and limits.
+
+### Say what is intended: expectations and accepted risks
+
+Only you know which signals are intended. Write it down once in a local `expectations.json` and the audit checks it every time:
+
+```json
+{
+  "version": 1,
+  "expectations": [
+    {"id": "staff-private", "type": "channel_visible_only_to", "channel_id": "YOUR_STAFF_CHANNEL_ID",
+     "role_ids": ["YOUR_STAFF_ROLE_ID"], "severity": "critical"}
+  ],
+  "accepted_risks": [
+    {"code": "individual_member_overrides", "channel_id": "YOUR_TICKET_CHANNEL_ID",
+     "reason": "Ticket workflow", "expires": "2027-03-31"}
+  ]
+}
+```
+
+Accepted risks need a reason and an expiry date. They stay visible in reports and reopen after the date. See [expectations and accepted risks](docs/expectations.md).
+
 ## 2. Configure targeted fixes
 
 For supported elevated-role findings, an **offline assistant** can create revocation proposals. You choose the finding numbers and the exact permissions to revoke:
@@ -85,7 +111,7 @@ For supported elevated-role findings, an **offline assistant** can create revoca
 python serversentry.py suggest YOUR_AUDIT.json --output policy.suggested.json
 ```
 
-It skips Administrator, managed, protected and default roles. It cannot infer private-channel intent or convert every finding into a fix. Review the generated JSON before using it. You can also write a policy manually:
+It handles elevated roles and channel management overrides of ordinary roles (as an explicit deny). It skips Administrator, managed, protected and default roles. `@everyone` findings stay manual because the fixer never edits @everyone. It cannot infer private-channel intent or convert every finding into a fix. Review the generated JSON before using it. You can also write a policy manually:
 
 Copy `config/policy.example.json` to `policy.json` and insert **your own Discord IDs locally**:
 
@@ -172,10 +198,10 @@ Role originals are saved in `fixer_output/muted_role_state.json` **before** muti
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall -q discord_audit.py discord_fix.py role_mute.py serversentry.py serversentry_snapshots.py serversentry_compare.py serversentry_report.py serversentry_repair_model.py serversentry_repair_run.py serversentry_suggestions.py
+python -m compileall -q discord_audit.py discord_fix.py role_mute.py serversentry.py serversentry_snapshots.py serversentry_compare.py serversentry_report.py serversentry_repair_model.py serversentry_repair_run.py serversentry_suggestions.py serversentry_rules.py serversentry_policy.py serversentry_links.py
 ```
 
-Tests cover policy safety, repository sanitization, history, comparisons, reports and the audit callback. Synthetic REST tests also exercise sequential repairs, stale plans, journal failures, uncertain requests, verification, restore guards and confirmation. CI checks selected Python versions on Linux and Windows, plus browser report behavior. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server. See [contributing](CONTRIBUTING.md) for development and optional browser checks.
+Tests cover policy safety, the ruleset, expectations and accepted risks, repository sanitization, history, comparisons, reports and the audit callback. Synthetic REST tests also exercise sequential repairs, stale plans, journal failures, uncertain requests, verification, restore guards and confirmation. CI checks selected Python versions on Linux and Windows, plus browser report behavior. They cannot establish that live Discord permissions will match your server's intent. Start with a separate test server. See [contributing](CONTRIBUTING.md) for development and optional browser checks.
 
 ## License
 

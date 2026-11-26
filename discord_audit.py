@@ -15,11 +15,15 @@ from typing import Any
 import discord
 from dotenv import load_dotenv
 
+from serversentry_links import DOCS_URL, REPO_URL, rule_url
+from serversentry_policy import apply_policy, load_expectations
 from serversentry_report import render_html
+from serversentry_rules import evaluate_rules
 from serversentry_snapshots import prepare_snapshot, save_audit_bundle
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "audit_output"
+EXPECTATIONS_FILE = BASE_DIR / "expectations.json"  # Optional, local and gitignored.
 
 # Permissions worth showing for the effective single-role view of each channel.
 CHANNEL_PERMISSION_KEYS = (
@@ -68,6 +72,17 @@ def add_finding(
         "severity": severity, "code": code, "title": title,
         "details": details, "recommendation": recommendation, **context,
     })
+
+
+def server_settings(guild: discord.Guild) -> dict[str, str]:
+    """Gateway-provided server settings. Unknown values are omitted, never guessed."""
+    result: dict[str, str] = {}
+    for key in ("verification_level", "explicit_content_filter", "mfa_level", "default_notifications"):
+        value = getattr(guild, key, None)
+        name = getattr(value, "name", None)
+        if isinstance(name, str):
+            result[key] = name
+    return result
 
 
 def audit_guild(guild: discord.Guild) -> dict[str, Any]:
@@ -167,7 +182,8 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
                 "allow": allow_names, "deny": deny_names,
                 "allow_bitfield": str(allowed.value), "deny_bitfield": str(denied.value),
             })
-            if "view_channel" in deny_names and any(x in allow_names for x in ("send_messages", "connect", "speak")):
+            # discord.py reports View Channel as `read_messages`; accept both spellings.
+            if {"view_channel", "read_messages"} & set(deny_names) and any(x in allow_names for x in ("send_messages", "connect", "speak")):
                 add_finding(
                     findings, "info", "conflicting_overwrite",
                     f"Conflicting override in #{channel.name}",
@@ -240,6 +256,13 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
                 "Auditing is read-only, but compromised bot credentials could misuse this role.",
                 "Remove extra bot permissions or remove the bot after auditing.",
             )
+    server_info = {"id": str(guild.id), "name": guild.name, "role_count": len(roles),
+                   "channel_count_visible_or_obfuscated": len(channels),
+                   "obfuscated_channel_count": obfuscated_count,
+                   "not_synced_channel_count": unsynced_count, "audit_bot": bot_info,
+                   "settings": server_settings(guild)}
+    # Ruleset 2 works on the exported plain data, so it can be tested without Discord.
+    findings.extend(evaluate_rules({"server": server_info, "roles": exported_roles, "channels": exported_channels}))
     severity_order = {"critical": 0, "warning": 1, "info": 2}
     findings.sort(key=lambda f: (severity_order.get(f["severity"], 9), f["code"], f["title"]))
     return {
@@ -257,10 +280,7 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
                 "Private threads and message content are not read; only cached guild channels are inspected.",
             ],
         },
-        "server": {"id": str(guild.id), "name": guild.name, "role_count": len(roles),
-                   "channel_count_visible_or_obfuscated": len(channels),
-                   "obfuscated_channel_count": obfuscated_count,
-                   "not_synced_channel_count": unsynced_count, "audit_bot": bot_info},
+        "server": server_info,
         "roles": exported_roles, "channels": exported_channels, "findings": findings,
         "summary": dict(Counter(f["severity"] for f in findings)),
     }
@@ -269,16 +289,19 @@ def audit_guild(guild: discord.Guild) -> dict[str, Any]:
 def markdown_report(data: dict[str, Any]) -> str:
     server = data["server"]
     summary = data["summary"]
+    accepted = [f for f in data["findings"] if f.get("accepted")]
     lines = [
         "# Discord Permission Audit", "",
         f"**Server:** {server['name']} (`{server['id']}`)",
         f"**Generated at (UTC):** {data['audit']['generated_at_utc']}",
         f"**Scope:** {server['role_count']} roles, {server['channel_count_visible_or_obfuscated']} channels", "",
         "## Results", "",
-        f"- Critical: **{summary.get('critical', 0)}**",
-        f"- Warnings: **{summary.get('warning', 0)}**",
-        f"- Informational: **{summary.get('info', 0)}**",
-        f"- Obfuscated channels: **{server['obfuscated_channel_count']}**", "",
+        "| Severity | Open findings |", "| --- | ---: |",
+        f"| Critical | **{summary.get('critical', 0)}** |",
+        f"| Warning | **{summary.get('warning', 0)}** |",
+        f"| Info | **{summary.get('info', 0)}** |",
+        f"| Accepted risks (reviewed, time-limited) | {len(accepted)} |",
+        f"| Obfuscated channels | {server['obfuscated_channel_count']} |", "",
         "**Important:** Findings require review and are not confirmed vulnerabilities. No changes were made.", "",
     ]
     if not data["findings"]:
@@ -289,14 +312,27 @@ def markdown_report(data: dict[str, Any]) -> str:
             continue
         lines += [f"## {severity.capitalize()} ({len(subset)})", ""]
         for index, item in enumerate(subset, 1):
-            lines += [
-                f"### {index}. {item['title']}", "",
-                item["details"], "",
-                f"**Recommendation:** {item['recommendation']}", "",
-            ]
+            lines += [f"### {index}. {item['title']}", ""]
+            if item.get("accepted"):
+                lines += [f"> **Accepted risk until {item['accepted']['expires']}:** {item['accepted']['reason']}", ""]
+            elif item.get("acceptance_expired"):
+                lines += [f"> **Acceptance expired on {item['acceptance_expired']['expires']}:** "
+                          f"{item['acceptance_expired']['reason']} (open again)", ""]
+            lines += [item["details"], "", f"**Recommendation:** {item['recommendation']}", "",
+                      f"Rule: `{item['code']}` · [Rule reference]({rule_url(item['code'])})", ""]
+    policy = data.get("policy")
+    if policy:
+        lines += ["## Expectations and accepted risks", "",
+                  f"- Expectations evaluated: {policy['expectations_evaluated']}",
+                  f"- Accepted risks active on {policy['as_of']}: {policy['accepted_count']}"]
+        lines += [f"- Expired (open again): `{x['code']}` on {x['expires']}" for x in policy["expired"]]
+        lines += [f"- Expiring within 30 days: `{x['code']}` on {x['expires']}" for x in policy["expiring_soon"]]
+        lines += [f"- Matched nothing, consider removing: `{x['code']}`" for x in policy["unused_acceptances"]]
+        lines += [""]
     lines += ["## Audit limitations", ""]
     lines.extend(f"- {limitation}" for limitation in data["audit"]["limitations"])
-    lines += ["", "Review JSON exports privately and never share the bot token.", ""]
+    lines += ["", "Review JSON exports privately and never share the bot token.", "",
+              f"Generated by [ServerSentry]({REPO_URL}) · [Documentation]({DOCS_URL}reports.md)", ""]
     return "\n".join(lines)
 
 
@@ -319,7 +355,8 @@ class AuditClient(discord.Client):
                 raise RuntimeError(
                     "Guild not found. Check GUILD_ID and make sure the bot is installed on that server."
                 )
-            data = prepare_snapshot(audit_guild(guild))
+            policy = load_expectations(EXPECTATIONS_FILE) if EXPECTATIONS_FILE.is_file() else None
+            data = prepare_snapshot(apply_policy(audit_guild(guild), policy, fresh=True))
             paths = save_audit_bundle(data, markdown_report(data), render_html(data), OUTPUT_DIR)
             print(f"Audit completed for: {guild.name}")
             print(f"JSON:    {paths['json']}")
@@ -327,6 +364,11 @@ class AuditClient(discord.Client):
             print(f"HTML:    {paths['html']}")
             print(f"History: {paths['history']}")
             print(f"Results: {data['summary']}")
+            if policy:
+                info = data["policy"]
+                print(f"Expectations: {info['expectations_evaluated']} checked, {info['accepted_count']} accepted risk(s).")
+                for item in info["expired"]:
+                    print(f"WARNING: accepted risk expired on {item['expires']}: {item['code']}")
             if data["server"]["obfuscated_channel_count"]:
                 print("WARNING: Some channels are not fully visible to the bot.")
         except Exception as exc:

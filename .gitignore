@@ -17,3 +17,8 @@ node_modules/
 *.zip
 *state*.json
 
+
+# Local expectations and accepted risks contain your server IDs.
+expectations.json
+expectations.*.json
+!expectations.example.json

@@ -13,3 +13,5 @@ Expected finding groups:
 - 1 group involving member aliases that cannot be compared individually.
 
 The examples also include role/channel renames, changed permissions, a new channel and aggregate member overrides. They illustrate comparison behavior; they are not a complete live Discord capture.
+
+`expectations.json` is a synthetic example of declared expectations and accepted risks. `python serversentry.py demo` applies it to both scans: one expectation is met in the newer scan, one is still violated, one accepted risk is active, one has expired and one matches nothing.
