@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "_comment": "Synthetic demo. Real IDs are 17-20 digit Discord snowflakes. See docs/expectations.md.",
+  "expectations": [
+    {
+      "id": "staff-channel-private",
+      "type": "channel_visible_only_to",
+      "channel_id": "1001",
+      "role_ids": ["200"],
+      "severity": "critical",
+      "reason": "The staff channel contains moderation discussions."
+    },
+    {
+      "id": "helpers-no-manage-roles",
+      "type": "role_must_lack",
+      "role_id": "200",
+      "permissions": ["manage_roles"],
+      "reason": "Helpers must never be able to assign roles."
+    },
+    {
+      "id": "everyone-cannot-mention-all",
+      "type": "permission_allowlist",
+      "permission": "mention_everyone",
+      "role_ids": []
+    }
+  ],
+  "accepted_risks": [
+    {
+      "code": "individual_member_overrides",
+      "channel_id": "1000",
+      "reason": "Ticket-style channel: per-member overrides are part of the workflow.",
+      "expires": "2027-03-31"
+    },
+    {
+      "code": "conflicting_overwrite",
+      "channel_id": "1000",
+      "reason": "Temporary exception for a past event.",
+      "expires": "2026-10-01"
+    },
+    {
+      "code": "unsynced_channels",
+      "reason": "Not in this scan: shows how unused acceptances are listed.",
+      "expires": "2027-01-15"
+    }
+  ]
+}

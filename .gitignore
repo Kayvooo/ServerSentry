@@ -19,6 +19,6 @@ node_modules/
 
 
 # Local expectations and accepted risks contain your server IDs.
-expectations.json
-expectations.*.json
-!expectations.example.json
+/expectations.json
+/expectations.*.json
+!/expectations.example.json
