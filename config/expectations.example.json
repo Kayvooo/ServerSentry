@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "_comment": "Copy to expectations.json (gitignored) and add your own IDs. See docs/expectations.md.",
+  "expectations": [],
+  "accepted_risks": []
+}

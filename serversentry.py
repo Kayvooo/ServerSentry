@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from serversentry_compare import compare_snapshots
+from serversentry_policy import apply_policy, load_expectations
 from serversentry_report import render_html
 from serversentry_snapshots import atomic_write, load_snapshot
 
@@ -18,11 +19,13 @@ def parser() -> argparse.ArgumentParser:
     report = commands.add_parser("report", help="Render a current or legacy audit as a local HTML file")
     report.add_argument("snapshot", type=Path)
     report.add_argument("--output", type=Path, required=True, help="Destination HTML file")
+    report.add_argument("--expectations", type=Path, help="Apply declared expectations and accepted risks (offline)")
     compare = commands.add_parser("compare", help="Compare two audits from the same server")
     compare.add_argument("before", type=Path)
     compare.add_argument("after", type=Path)
     compare.add_argument("--output", type=Path, required=True, help="Destination HTML file")
     compare.add_argument("--json-output", type=Path, help="Optional machine-readable comparison")
+    compare.add_argument("--expectations", type=Path, help="Apply declared expectations and accepted risks to both scans")
     demo = commands.add_parser("demo", help="Generate a comparison from bundled synthetic examples")
     demo.add_argument("--output", type=Path, default=Path("audit_output/demo.html"))
     suggest = commands.add_parser("suggest", help="Choose supported permission revocations from an audit (offline)")
@@ -60,19 +63,22 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "report":
             _protect_inputs([args.snapshot], [args.output])
-            html = render_html(load_snapshot(args.snapshot))
+            policy = load_expectations(args.expectations) if args.expectations else None
+            html = render_html(apply_policy(load_snapshot(args.snapshot), policy))
             comparison = None
         else:
             if args.command == "demo":
                 examples = Path(__file__).resolve().parent / "examples"
                 before_path, after_path = examples / "before.json", examples / "after.json"
-                json_output = None
+                json_output, expectations = None, examples / "expectations.json"
             else:
                 before_path, after_path = args.before, args.after
-                json_output = args.json_output
+                json_output, expectations = args.json_output, args.expectations
             outputs = [args.output] + ([json_output] if json_output else [])
             _protect_inputs([before_path, after_path], outputs)
-            before, after = load_snapshot(before_path), load_snapshot(after_path)
+            policy = load_expectations(expectations) if expectations else None
+            before = apply_policy(load_snapshot(before_path), policy)
+            after = apply_policy(load_snapshot(after_path), policy)
             comparison = compare_snapshots(before, after)
             html = render_html(after, comparison, before)
             if json_output:

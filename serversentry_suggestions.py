@@ -4,6 +4,8 @@ from __future__ import annotations
 from serversentry_snapshots import validate_snapshot
 
 REVIEW_PERMISSIONS = {"manage_guild", "manage_roles", "manage_channels", "manage_webhooks"}
+OVERRIDE_PERMISSIONS = {"manage_roles", "manage_channels", "manage_webhooks"}
+SUPPORTED_CODES = ("elevated_role_review", "role_channel_management_override")
 
 
 def candidates(snapshot: dict, protected_ids=()) -> tuple[list[dict], list[str]]:
@@ -14,10 +16,11 @@ def candidates(snapshot: dict, protected_ids=()) -> tuple[list[dict], list[str]]
     protected = set(map(str, protected_ids)) | {
         r["id"] for r in snapshot["roles"] if "administrator" in r.get("guild_permissions", [])
     }
+    channels = {c["id"]: c for c in snapshot["channels"] if not c.get("obfuscated")}
     options, skipped = [], []
     for number, finding in enumerate(snapshot["findings"], 1):
         role = roles.get(finding.get("role_id"))
-        if finding["code"] != "elevated_role_review" or role is None:
+        if finding["code"] not in SUPPORTED_CODES or role is None:
             skipped.append(f"#{number}: unsupported finding; review manually")
             continue
         identifier = role["id"]
@@ -25,9 +28,21 @@ def candidates(snapshot: dict, protected_ids=()) -> tuple[list[dict], list[str]]
                 or not 15 <= len(identifier) <= 21):
             skipped.append(f"#{number}: protected, managed, default or synthetic role; no proposal")
             continue
+        if finding["code"] == "role_channel_management_override":
+            channel = channels.get(finding.get("channel_id", ""))
+            if channel is None or not 15 <= len(channel["id"]) <= 21:
+                skipped.append(f"#{number}: channel missing, hidden or synthetic; no proposal")
+                continue
+            permissions = sorted(OVERRIDE_PERMISSIONS & set(finding.get("permissions", [])))
+            if permissions:
+                options.append({"number": number, "kind": "channel_override", "role_id": identifier,
+                                "name": role["name"], "channel_id": channel["id"],
+                                "channel_name": channel.get("name", "channel"), "permissions": permissions})
+            continue
         permissions = sorted(REVIEW_PERMISSIONS & set(role.get("guild_permissions", [])))
         if permissions:
-            options.append({"number": number, "role_id": identifier, "name": role["name"], "permissions": permissions})
+            options.append({"number": number, "kind": "role", "role_id": identifier, "name": role["name"],
+                            "permissions": permissions})
     return options, skipped
 
 
@@ -43,8 +58,15 @@ def suggest_policy(snapshot: dict, selections: dict[int, list[str]], protected_i
         choice = by_number[number]
         if not flags or not set(flags) <= set(choice["permissions"]):
             raise ValueError(f"Finding #{number}: choose only listed permissions to revoke")
-        actions.append({"type": "role_permissions", "role_id": choice["role_id"], "revoke": sorted(set(flags)),
-                        "reason": f"Explicitly selected revocation for audit finding {number}"})
+        reason = f"Explicitly selected revocation for audit finding {number}"
+        if choice["kind"] == "channel_override":
+            # An explicit deny only removes authority, so it never needs the privileged-grant opt-in.
+            actions.append({"type": "channel_role_permissions", "channel_id": choice["channel_id"],
+                            "role_id": choice["role_id"], "set": {flag: False for flag in sorted(set(flags))},
+                            "reason": reason})
+        else:
+            actions.append({"type": "role_permissions", "role_id": choice["role_id"],
+                            "revoke": sorted(set(flags)), "reason": reason})
     protected = set(map(str, protected_ids)) | {
         r["id"] for r in snapshot["roles"] if "administrator" in r.get("guild_permissions", [])
     }
@@ -55,7 +77,8 @@ def suggest_policy(snapshot: dict, selections: dict[int, list[str]], protected_i
 def interactive_suggestion(snapshot: dict, *, selected=None, revoke=None, protected_ids=(), ask=input) -> dict:
     options, skipped = candidates(snapshot, protected_ids)
     for option in options:
-        print(f"#{option['number']}: {option['name']} — review {', '.join(option['permissions'])}")
+        where = f" in #{option['channel_name']}" if option["kind"] == "channel_override" else ""
+        print(f"#{option['number']}: {option['name']}{where} — review {', '.join(option['permissions'])}")
     for note in skipped: print("MANUAL:", note)
     if not options:
         raise ValueError("No supported revocation proposals. No policy was written")

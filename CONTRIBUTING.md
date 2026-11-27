@@ -37,7 +37,7 @@ The check generates temporary synthetic reports and verifies filters, expandable
 - Fix keyboard navigation, narrow-window layout or filtering behavior.
 - Document an installation issue with OS, Python version and sanitized error output.
 
-New rules should include a stable code, rationale, severity, scope limits and meaningful tests. Do not infer server intent solely from names. Update the ruleset metadata when rule behavior changes; see `docs/reports.md`.
+New rules should include a stable code, rationale, severity, scope limits and meaningful tests. Register the code in `serversentry_rules.RULE_INFO`, add a `### \`code\`` section to `docs/rules.md` (a test enforces this) and add it to `RULE_CODES` with a new ruleset version when behavior changes. Prefer rules on plain snapshot data (`serversentry_rules.py`) over rules that need Discord objects. discord.py reports one canonical name per permission (for example `read_messages` for View Channel); compare against that or normalize with `serversentry_policy.canonical`. Do not infer server intent solely from names. Update the ruleset metadata when rule behavior changes; see `docs/reports.md`.
 
 ## Repair changes
 

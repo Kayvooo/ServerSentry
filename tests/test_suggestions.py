@@ -49,6 +49,39 @@ class SuggestionTests(unittest.TestCase):
             source = interactive_suggestion(self.snapshot, ask=lambda _: next(answers))
         self.assertEqual(source["actions"][0]["revoke"], ["manage_roles"])
 
+    def override_snapshot(self):
+        data = deepcopy(self.snapshot)
+        data["channels"][0]["id"] = "100000000000010"
+        data["findings"].append({
+            "severity": "warning", "code": "role_channel_management_override", "title": "x", "details": "x",
+            "recommendation": "x", "role_id": data["roles"][1]["id"], "channel_id": "100000000000010",
+            "permissions": ["manage_roles", "manage_webhooks"]})
+        return data, len(data["findings"])
+
+    def test_channel_override_proposal_is_an_explicit_deny_that_validates(self):
+        from serversentry_repair_model import validate_policy
+        data, number = self.override_snapshot()
+        options, _ = candidates(data)
+        option = next(o for o in options if o["number"] == number)
+        self.assertEqual((option["kind"], option["permissions"]), ("channel_override", ["manage_roles", "manage_webhooks"]))
+        policy = suggest_policy(data, {number: ["manage_roles"]})
+        action = policy["actions"][0]
+        self.assertEqual(action["type"], "channel_role_permissions")
+        self.assertEqual(action["set"], {"manage_roles": False})  # a deny never needs the privileged-grant opt-in
+        self.assertNotIn("allow_privilege_grant", action)
+        validate_policy(policy)
+
+    def test_channel_override_only_offers_listed_permissions_and_safe_targets(self):
+        data, number = self.override_snapshot()
+        with self.assertRaises(ValueError):
+            suggest_policy(data, {number: ["manage_channels"]})
+        hidden = deepcopy(data)
+        hidden["channels"][0]["obfuscated"] = True
+        self.assertFalse(any(o["number"] == number for o in candidates(hidden)[0]))
+        managed = deepcopy(data)
+        managed["roles"][1]["managed"] = True
+        self.assertFalse(any(o["number"] == number for o in candidates(managed)[0]))
+
     def test_cli_is_offline_and_never_overwrites_input(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             source = Path(directory) / "snapshot.json"
